@@ -16,6 +16,7 @@ type point struct {
 	Y int32
 }
 
+// MARK: grid world struct def
 type GridWorld struct {
 	Width  int
 	Height int
@@ -34,17 +35,7 @@ type GridWorld struct {
 	path []point
 }
 
-// function that return all the keys for a given map
-// Uses Generics
-// the ~ indicates derived map
-func Keys[M ~map[K]V, K comparable, V any](m M) []K {
-	r := make([]K, 0, len(m))
-	for k := range m {
-		r = append(r, k)
-	}
-	return r
-}
-
+// ## Methods for grid world
 func (gridworld *GridWorld) wall_at(x int32, y int32) bool {
 	return gridworld.walls[y*int32(gridworld.Width)+x]
 
@@ -54,8 +45,25 @@ func (gridworld *GridWorld) set_wall_at(x int32, y int32, value bool) {
 	gridworld.walls[y*int32(gridworld.Width)+x] = value
 }
 
+// ##
+
+// function that return all the keys for a given map
+// Uses Generics
+// the ~ indicates derived map. Not used here.
+func Keys[M ~map[K]V, K comparable, V any](m M) []K {
+	r := make([]K, 0, len(m))
+	for k := range m {
+		r = append(r, k)
+	}
+	return r
+}
+
+// type alias
+// Note when using the type alias Rectangle in raylib function, the compiler will complain.
+// Need to "unwrap" the alias with raylb.Rectangle(variable) where variable as type Rectangle.
 type Rectangle raylb.Rectangle
 
+// function to center a rectangle within another rectangle by a relative margin
 func center_rect(rect Rectangle, relative_width float32, relative_height float32) Rectangle {
 
 	return Rectangle{
@@ -84,7 +92,7 @@ func draw_grid(location Rectangle, world *GridWorld) {
 				Height: cell_height,
 			}
 
-			// Update the cell location
+			// Update the cells location
 			cell.X += float32(j) * cell.Width
 			cell.Y += float32(i) * cell.Height
 
@@ -94,7 +102,7 @@ func draw_grid(location Rectangle, world *GridWorld) {
 				color = raylb.DarkPurple // set the color for the walls
 
 			}
-
+			// Coordinates for the current point.
 			var point point = point{X: int32(j), Y: int32(i)}
 			if !point_is_unvisited(world, point) {
 				color = raylb.LightGray
@@ -117,13 +125,13 @@ func draw_grid(location Rectangle, world *GridWorld) {
 			raylb.DrawRectangleRec(raylb.Rectangle(cell), color)
 			raylb.DrawRectangleLinesEx(raylb.Rectangle(cell), 1, raylb.Beige)
 
+			// if points are visited assigned a different color and a text with distance.
 			if !point_is_unvisited(world, point) {
 				text := fmt.Sprintf("%v", distance_at(world, point))
 				raylb.DrawText(text, int32(cell.X+5), int32(cell.Y+5), 25, raylb.White)
 			}
 
 			// Event handler
-			// Drawing walls
 			if raylb.CheckCollisionPointRec(mousePosition, raylb.Rectangle(cell)) {
 				if raylb.IsMouseButtonPressed(raylb.MouseButtonLeft) {
 					// method set_wall_at set the value
@@ -131,17 +139,20 @@ func draw_grid(location Rectangle, world *GridWorld) {
 					world.set_wall_at(int32(j), int32(i), !world.wall_at(int32(j), int32(i)))
 
 				}
-
+				// Change the position of the start point
 				if raylb.IsKeyReleased(raylb.KeyOne) {
 					world.start = point
 					reset_world(world)
 				}
+				// Change the position of the end point
 				if raylb.IsKeyReleased(raylb.KeyTwo) {
 					world.end = point
 					reset_world(world)
 				}
 			}
 
+			// loop over the point in the world.path vector.
+			// change the color and update the text within the cell.
 			for _, point := range world.path {
 				cell := Rectangle{
 					X:      location.X,
@@ -161,20 +172,21 @@ func draw_grid(location Rectangle, world *GridWorld) {
 
 }
 
-// MARK: Dijkstra
+// MARK: Dijkstra.
+// Function that implements Dijkstra algorithm:
 func step_dijkstra(world *GridWorld) {
 
 	if !point_is_unvisited(world, world.end) {
 		return
 	}
 
-	// Loop over the neighbours current node
+	// Loop over the neighbours of the current node
 	for dx := -1; dx <= 1; dx++ {
 		for dy := -1; dy <= 1; dy++ {
-			if dx == 0 && dy == 0 { // current node
+			if dx == 0 && dy == 0 { // current node, do nothing
 				continue
 			}
-			if dx != 0 && dy != 0 { // diagonal to the current node
+			if dx != 0 && dy != 0 { // diagonal to the current node, skip.
 				continue
 			}
 			neigbour := point{
@@ -188,13 +200,18 @@ func step_dijkstra(world *GridWorld) {
 			if !point_is_unvisited(world, neigbour) {
 				continue
 			}
-			if world.wall_at(neigbour.X, neigbour.Y) {
+			if world.wall_at(neigbour.X, neigbour.Y) { // if wall do nothing. Walls are ignored.
 				continue
 			}
 
+			// Core of the distnance algorithm
+			// The distance at the current node + the distance to the neighbour. In this case +1
 			var dist_current_to_neighbour float32 = 1
 			distance := distance_at(world, world.current) + dist_current_to_neighbour
 
+			// check whether the calculated distance < the distance for the neighbour recorded in the struct.
+			// if true updated the neighbour distance record with the calculated distance.
+			// All the distances except the starting points are initialized at INFINITY
 			if distance < distance_at(world, neigbour) {
 				set_distance_at(world, neigbour, distance)
 			}
@@ -257,62 +274,77 @@ func point_is_unvisited(world *GridWorld, point point) bool {
 }
 
 func reset_world(world *GridWorld) {
+	// Initialize DijKstra data
+
+	// All distances are set to infinity except initial node:
 	for i := 0; i < world.Width*world.Height; i++ {
 		world.distances[i] = INFINITY
 	}
-
+	//  Initial node
 	world.current = world.start
 	set_distance_at(world, world.start, 0)
 
+	// all points are set in the map(set) as unvisited
 	for i := 0; i < world.Height; i++ {
 		for j := 0; j < world.Width; j++ {
 			world.unvisited[int32(i*world.Width+j)] = &point{X: int32(j), Y: int32(i)}
 		}
 	}
 
+	// The path is initialized
 	world.path = make([]point, 0)
 
 }
 
 // MARK: Reconstruct_path
+// Reconstruct path going backward.
+// Initial point is the end point
 func reconstruct_path(world *GridWorld) {
 
+	// if the end point is unvisited return.
+	// this prevents program hangs
 	if point_is_unvisited(world, world.end) {
 		return
 	}
-	world.current = world.end
-	world.path = make([]point, 0)
-	world.path = append(world.path, world.current)
 
+	world.current = world.end
+	world.path = make([]point, 0)                  // Initialized the end point.
+	world.path = append(world.path, world.current) // Initializes the path with the end point.
+
+	// loop till at least 1 of the current coordinates is different from the start point.
+	// basically will exit the loop when both coordinates match the start point.
 	for world.current.X != world.start.X || world.current.Y != world.start.Y {
 		next := world.current
 		min_distance := INFINITY
-		for dx := -1; dx <= 1; dx++ {
+		for dx := -1; dx <= 1; dx++ { // loop through the neighbour
 			for dy := -1; dy <= 1; dy++ {
-				if dx == 0 && dy == 0 {
+				if dx == 0 && dy == 0 { // current node ignored
 					continue
 				}
-				if dx != 0 && dy != 0 {
+				if dx != 0 && dy != 0 { // diagonal ignored
 					continue
 				}
 				neigbour := point{
 					X: world.current.X + int32(dx),
 					Y: world.current.Y + int32(dy),
 				}
-				if !point_in_bounds(world, neigbour) {
+				if !point_in_bounds(world, neigbour) { // within the world grid?
 					continue
 				}
-				if world.wall_at(neigbour.X, neigbour.Y) {
+				if world.wall_at(neigbour.X, neigbour.Y) { // do nothing if wall
 					continue
 				}
 
+				// Distance calculation:
+				// Find the minimun distance among the neighbour
 				dist := distance_at(world, neigbour)
 				if dist < min_distance {
 					min_distance = dist
-					next = neigbour
+					next = neigbour // next is updated with minimum distance neighbour for each loop
 				}
 			}
 		}
+		// Once the minimum distance neighbour is found assigns it to current. Adds it to the path.
 		world.current = next
 		world.path = append(world.path, world.current)
 
@@ -323,8 +355,8 @@ func reconstruct_path(world *GridWorld) {
 // MARK: main
 func main() {
 
-	// Initialze the Raylib window
-	raylb.InitWindow(WINDOWWIDTH, WINDOWHEIGHT, "PathFinder")
+	// Initialize the Raylib window
+	raylb.InitWindow(WINDOWWIDTH, WINDOWHEIGHT, "PathFinder Dijkstra")
 	defer raylb.CloseWindow()
 
 	window := Rectangle{
@@ -334,7 +366,7 @@ func main() {
 		Height: float32(WINDOWHEIGHT),
 	}
 
-	// But a subwindow within the main window
+	// Put a subwindow within the main window with some padding.
 	grid_rect := center_rect(window, 0.8, 0.8)
 
 	// Create the world
@@ -343,6 +375,7 @@ func main() {
 
 	startpoint := point{X: 0, Y: 0}
 
+	// Create the gridworld
 	world := GridWorld{
 		Width:  size,
 		Height: size,
@@ -356,42 +389,34 @@ func main() {
 		current:   startpoint,
 		path:      make([]point, 0),
 	}
+
+	// Initializes the grid world
 	reset_world(&world)
-	// Initialize DijKstra data
-	// all points are set in the map
-	// for i := 0; i < world.Height; i++ {
-	// 	for j := 0; j < world.Width; j++ {
-	// 		world.unvisited[int32(i*size+j)] = &point{X: int32(j), Y: int32(i)}
-	// 	}
-	// }
-	// All distances are set to infinity except initial node
-	// set_distance_at(&world, world.start, 0)
-	// for i := 1; i < size*size; i++ {
-	// 	world.distances[i] = INFINITY
-	// }
 
 	// Set the FPS target
 	raylb.SetTargetFPS(60)
 
 	// While loop until the window is closed
-	for !raylb.WindowShouldClose() { // while loop, stop on closing window
+	for !raylb.WindowShouldClose() {
 		raylb.BeginDrawing()
-
+		// Backround color.
 		raylb.ClearBackground(raylb.DarkGray)
 
 		// Calls the draw_grid function
 		draw_grid(grid_rect, &world)
 
 		// Do one step of Dijsktra
-		// Press s key
+		// Press "s" key for 1 Step at a time.
 		if raylb.IsKeyReleased(raylb.KeyS) || raylb.IsKeyDown(raylb.KeyF) {
 
 			step_dijkstra(&world)
 		}
+		// Key "r" for Reset
 		if raylb.IsKeyReleased(raylb.KeyR) {
 			reset_world(&world)
 		}
 
+		// Key "p" for Path drawing.
 		if raylb.IsKeyReleased(raylb.KeyP) {
 			reconstruct_path(&world)
 		}
