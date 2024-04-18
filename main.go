@@ -204,7 +204,7 @@ func step_dijkstra(world *GridWorld) {
 				continue
 			}
 
-			// Core of the distnance algorithm
+			// Core of the distance algorithm
 			// The distance at the current node + the distance to the neighbour. In this case +1
 			var dist_current_to_neighbour float32 = 1
 			distance := distance_at(world, world.current) + dist_current_to_neighbour
